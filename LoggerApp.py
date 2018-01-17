@@ -14,8 +14,6 @@ from flask_socketio import SocketIO, emit
 from kafka import KafkaConsumer
 from kafka import TopicPartition
 
-from DataGeneration import create_marketsituation_csv
-
 app = Flask(__name__, static_url_path='')
 CORS(app)
 # socketio = SocketIO(app, logger=True, engineio_logger=True)
@@ -23,40 +21,10 @@ socketio = SocketIO(app)
 
 kafka_endpoint = os.getenv('KAFKA_URL', 'vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de:9092')
 
-'''
-The following topics exist in kafka_endpoint:
-
-  'deleteConsumer','getConsumers','getProducts','test','getMerchant','getMerchants','restockOffer',
-  'addConsumer','sales','deleteOffer','marketshare','buyOffer',
-  'addOffer','revenue','updates','__consumer_offsets','addProduct',
-  'getConsumer','getOffers','buyOffers','deleteProduct',
-  'getOffer','updateOffer','addMerchant','deleteMerchant',
-  'producer','SalesPerMinutes','getProduct','salesPerMinutes',
-  'marketSituation'
-'''
+# The following kafka topics are accessible by merchants and the management UI
 topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerMinutes',
-          'cumulativeAmountBasedMarketshare', 'cumulativeTurnoverBasedMarketshare',
+          'cumulativeAmountBasedMarketshare', 'cumulativeRevenueBasedMarketshare',
           'marketSituation', 'revenuePerMinute', 'revenuePerHour', 'profitPerMinute']
-
-'''
-kafka_producer.send(KafkaProducerRecord(
-"updateOffer", s"""{
-    "offer_id": $offer_id,
-    "uid": ${offer.uid},
-    "product_id": ${offer.product_id},
-    "quality": ${offer.quality},
-    "merchant_id": ${offer.merchant_id},
-    "amount": ${offer.amount},
-    "price": ${offer.price},
-    "shipping_time_standard": ${offer.shipping_time.standard},
-    "shipping_time_prime": ${offer.shipping_time.prime},
-    "prime": ${offer.prime},
-    "signature": "${offer.signature}",
-    "http_code": 200,
-    "timestamp": "${new DateTime()}"
-}"""))
-
-'''
 
 
 class KafkaHandler(object):
@@ -83,9 +51,7 @@ class KafkaHandler(object):
         self.thread.start()  # Start the execution
 
     def run(self):
-        count = 0
         for msg in self.consumer:
-            count += 1
             try:
                 msg_json = json.loads(msg.value.decode('utf-8'))
                 if 'http_code' in msg_json and msg_json['http_code'] != 200:
@@ -122,12 +88,6 @@ def json_response(obj):
     js = json.dumps(obj)
     resp = Response(js, status=200, mimetype='application/json')
     return resp
-
-
-@app.route("/testdata")
-def test_data():
-    response = create_marketsituation_csv()
-    return json_response(response)
 
 
 @app.route("/topics")
@@ -266,5 +226,4 @@ def static_proxy(path):
 
 
 if __name__ == "__main__":
-    # app.run(port=8001)
     socketio.run(app, host='0.0.0.0', port=8001)

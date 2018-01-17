@@ -1,4 +1,3 @@
-cython
 flask<=0.12
 kafka-python
 flask-cors
