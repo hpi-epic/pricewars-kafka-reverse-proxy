@@ -1,6 +1,5 @@
 import argparse
 import collections
-import csv
 import json
 import threading
 import time
@@ -15,10 +14,6 @@ from flask_socketio import SocketIO, emit
 from kafka import KafkaConsumer
 from kafka import TopicPartition
 
-app = Flask(__name__, static_url_path='')
-CORS(app)
-socketio = SocketIO(app)
-
 
 # The following kafka topics are accessible by merchants and the management UI
 topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerMinutes',
@@ -27,8 +22,9 @@ topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerM
 
 
 class KafkaHandler:
-    def __init__(self, kafka_endpoint: str):
+    def __init__(self, kafka_endpoint: str, socketio: SocketIO):
         self.consumer = KafkaConsumer(bootstrap_servers=kafka_endpoint)
+        self.socketio = socketio
         self.dumps = {}
         end_offset = {}
 
@@ -64,7 +60,7 @@ class KafkaHandler:
                 output_json = json.dumps(output)
                 self.dumps[str(msg.topic)].append(output)
 
-                socketio.emit(str(msg.topic), output_json, namespace='/')
+                self.socketio.emit(str(msg.topic), output_json, namespace='/')
             except Exception as e:
                 print('error emit msg', e)
 
@@ -73,15 +69,22 @@ class KafkaHandler:
 
 class KafkaReverseProxy:
     def __init__(self, kafka_endpoint: str):
+        self.app = Flask(__name__, static_url_path='')
+        CORS(self.app)
+        self.socketio = SocketIO(self.app)
+
         self.kafka_endpoint = kafka_endpoint
-        self.kafka_handler = KafkaHandler(kafka_endpoint)
+        self.kafka_handler = KafkaHandler(kafka_endpoint, self.socketio)
+        self.register_routes()
 
-        app.add_url_rule('/status', 'status', self.status, methods=['GET'])
-        app.add_url_rule('/export/data/<path:topic>', 'export_csv_for_topic', self.export_csv_for_topic, methods=['GET'])
-        app.add_url_rule('/topics', 'get_topics', self.get_topics, methods=['GET'])
-        app.add_url_rule('/data/<path:path>', 'static_proxy', self.static_proxy, methods=['GET'])
+    def register_routes(self):
+        self.app.add_url_rule('/status', 'status', self.status, methods=['GET'])
+        self.app.add_url_rule('/export/data/<path:topic>', 'export_csv_for_topic', self.export_csv_for_topic,
+                         methods=['GET'])
+        self.app.add_url_rule('/topics', 'get_topics', self.get_topics, methods=['GET'])
+        self.app.add_url_rule('/data/<path:path>', 'static_proxy', self.static_proxy, methods=['GET'])
+        self.socketio.on_event('connect', self.on_connect)
 
-    @socketio.on('connect')
     def on_connect(self):
         if self.kafka_handler.dumps:
             for msg_topic in self.kafka_handler.dumps:
@@ -158,10 +161,12 @@ class KafkaReverseProxy:
 
         return json.dumps(response)
 
-    def get_topics(self):
+    @staticmethod
+    def get_topics():
         return json.dumps(topics)
 
-    def static_proxy(self, path):
+    @staticmethod
+    def static_proxy(path):
         return send_from_directory('data', path, as_attachment=True)
 
 
@@ -205,7 +210,6 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    # TODO: rename
-    kafka_endpoint_test = os.getenv('KAFKA_URL', 'vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de:9092')
-    KafkaReverseProxy(kafka_endpoint_test)
-    socketio.run(app, host='0.0.0.0', port=args.port)
+    kafka_endpoint = os.getenv('KAFKA_URL', 'vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de:9092')
+    server = KafkaReverseProxy(kafka_endpoint)
+    server.socketio.run(server.app, host='0.0.0.0', port=args.port)
