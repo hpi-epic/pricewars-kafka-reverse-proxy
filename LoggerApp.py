@@ -32,15 +32,14 @@ class KafkaHandler:
             current_partition = TopicPartition(topic, 0)
             self.consumer.assign([current_partition])
             self.consumer.seek_to_end()
-            offset = self.consumer.position(current_partition)
-            end_offset[topic] = offset > 100 and offset or 100
+            end_offset[topic] = self.consumer.position(current_partition)
 
         topic_partitions = [TopicPartition(topic, 0) for topic in topics]
         self.consumer.assign(topic_partitions)
         for topic in topics:
-            self.consumer.seek(TopicPartition(topic, 0), end_offset[topic] - 100)
+            self.consumer.seek(TopicPartition(topic, 0), max(0, end_offset[topic] - 100))
 
-        self.thread = threading.Thread(target=self.run, args=())
+        self.thread = threading.Thread(target=self.run)
         self.thread.daemon = True  # Demonize thread
         self.thread.start()  # Start the execution
 
@@ -65,6 +64,21 @@ class KafkaHandler:
 
         self.consumer.close()
 
+    def on_connect(self):
+        if self.dumps:
+            for msg_topic in self.dumps:
+                messages = list(self.dumps[msg_topic])
+                emit(msg_topic, messages, namespace='/')
+
+    def status(self):
+        status_dict = {}
+        for topic in self.dumps:
+            status_dict[topic] = {
+                'messages': len(self.dumps[topic]),
+                'last_message': self.dumps[topic][-1] if self.dumps[topic] else ''
+            }
+        return json.dumps(status_dict)
+
 
 class KafkaReverseProxy:
     def __init__(self, kafka_endpoint: str):
@@ -77,34 +91,17 @@ class KafkaReverseProxy:
         self.register_routes()
 
     def register_routes(self):
-        self.app.add_url_rule('/status', 'status', self.status, methods=['GET'])
+        self.app.add_url_rule('/status', 'status', self.kafka_handler.status, methods=['GET'])
         self.app.add_url_rule('/export/data/<path:topic>', 'export_csv_for_topic', self.export_csv_for_topic,
                               methods=['GET'])
         self.app.add_url_rule('/topics', 'get_topics', self.get_topics, methods=['GET'])
         self.app.add_url_rule('/data/<path:path>', 'static_proxy', self.static_proxy, methods=['GET'])
-        self.socketio.on_event('connect', self.on_connect)
-
-    def on_connect(self):
-        if self.kafka_handler.dumps:
-            for msg_topic in self.kafka_handler.dumps:
-                messages = list(self.kafka_handler.dumps[msg_topic])
-                emit(msg_topic, messages, namespace='/')
-
-    def status(self):
-        status_dict = {}
-        for topic in self.kafka_handler.dumps:
-            status_dict[topic] = {
-                'messages': len(self.kafka_handler.dumps[topic]),
-                'last_message': self.kafka_handler.dumps[topic][-1] if self.kafka_handler.dumps[topic] else ''
-            }
-        return json.dumps(status_dict)
+        self.socketio.on_event('connect', self.kafka_handler.on_connect)
 
     def export_csv_for_topic(self, topic):
         auth_header = request.headers.get('Authorization')
         merchant_token = auth_header.split(' ')[-1] if auth_header else None
         merchant_id = calculate_id(merchant_token) if merchant_token else None
-
-        max_messages = 10 ** 5
 
         if topic not in topics:
             return json.dumps({'error': 'unknown topic'})
@@ -126,6 +123,7 @@ class KafkaReverseProxy:
             Start and end can be anywhere, end - start needs to match the amount of messages.
             TODO: when deletion of some individual messages is possible and used, refactor!
             '''
+            max_messages = 10 ** 5
             offset = max(start_offset, end_offset - max_messages)
             consumer.seek(topic_partition, offset)
             for msg in consumer:
