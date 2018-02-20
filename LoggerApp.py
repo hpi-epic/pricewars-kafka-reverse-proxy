@@ -3,7 +3,6 @@ import collections
 import json
 import threading
 import time
-import os
 import hashlib
 import base64
 
@@ -13,7 +12,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from kafka import KafkaConsumer
 from kafka import TopicPartition
-
+from kafka.errors import NoBrokersAvailable
 
 # The following kafka topics are accessible by merchants and the management UI
 topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerMinutes',
@@ -80,7 +79,7 @@ class KafkaReverseProxy:
     def register_routes(self):
         self.app.add_url_rule('/status', 'status', self.status, methods=['GET'])
         self.app.add_url_rule('/export/data/<path:topic>', 'export_csv_for_topic', self.export_csv_for_topic,
-                         methods=['GET'])
+                              methods=['GET'])
         self.app.add_url_rule('/topics', 'get_topics', self.get_topics, methods=['GET'])
         self.app.add_url_rule('/data/<path:path>', 'static_proxy', self.static_proxy, methods=['GET'])
         self.socketio.on_event('connect', self.on_connect)
@@ -101,10 +100,6 @@ class KafkaReverseProxy:
         return json.dumps(status_dict)
 
     def export_csv_for_topic(self, topic):
-        shaper = {
-            'marketSituation': market_situation_shaper
-        }
-
         auth_header = request.headers.get('Authorization')
         merchant_token = auth_header.split(' ')[-1] if auth_header else None
         merchant_id = calculate_id(merchant_token) if merchant_token else None
@@ -150,7 +145,10 @@ class KafkaReverseProxy:
                     print('ValueError', e, 'in message:\n', msg.value)
             consumer.close()
 
-            df = shaper[topic](msgs) if topic in shaper else pd.DataFrame(msgs)
+            if topic == 'marketSituation':
+                df = market_situation_shaper(msgs)
+            else:
+                df = pd.DataFrame(msgs)
 
             filename = topic + '_' + str(int(time.time()))
             filepath = 'data/' + filename + '.csv'
@@ -202,14 +200,29 @@ def calculate_id(token: str) -> str:
     return base64.b64encode(hashlib.sha256(token.encode('utf-8')).digest()).decode('utf-8')
 
 
+def wait_for_kafka(kafka_endpoint, timeout: float = 60) -> None:
+    """
+    Waits until it is possible to connect to Kafka.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            KafkaConsumer(consumer_timeout_ms=1000, bootstrap_servers=kafka_endpoint)
+            return
+        except NoBrokersAvailable:
+            pass
+    raise RuntimeError(kafka_endpoint + ' not reachable')
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Kafka Reverse Proxy')
     parser.add_argument('--port', type=int, default=8001, help='port to bind socketIO App to')
+    parser.add_argument('--kafka_url', type=str, required=True, help='Endpoint of the kafka bootstrap server')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    kafka_endpoint = os.getenv('KAFKA_URL', 'vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de:9092')
-    server = KafkaReverseProxy(kafka_endpoint)
+    wait_for_kafka(args.kafka_url)
+    server = KafkaReverseProxy(args.kafka_url)
     server.socketio.run(server.app, host='0.0.0.0', port=args.port)

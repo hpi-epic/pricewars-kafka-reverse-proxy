@@ -7,5 +7,3 @@ WORKDIR $APP_HOME
 ADD . $APP_HOME
 
 RUN python3 -m pip install -r requirements.txt
-
-CMD ["./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "python", "LoggerApp.py"]
