@@ -3,5 +3,4 @@ kafka-python
 flask-cors
 eventlet
 flask-socketio
-numpy
 pandas
