@@ -6,34 +6,35 @@ This repository contains the Kafka Reverse Proxy which acts as an interfacing co
 * Management UI: The management UI needs to read from the live sales-data from the marketplace to display realtime pricing interaction between merchants. It also needs access to the aggregated statistics from Flink to visualize the performance of the merchants.
 * Merchants: Data-driven merchants have to be able to retrieve past market situations written to Kafka to do their learning. However, they should only be allowed to access the market situation data that they would have access to on a real system as well, ie the offers that were on the marketplace at a certain time and only their own sales data.
 
-The meta repository containing general information can be found [here](https://github.com/hpi-epic/masterproject-pricewars)
+The meta repository containing general information can be found [here](https://github.com/hpi-epic/pricewars)
 
 ## Application Overview
 
-| Repo | Branch 	| Deployment to  	| Status | Description |
-|--- |---	|---	|---  |---   |
-| [UI](https://github.com/hpi-epic/pricewars-mgmt-ui) | master  	|  [vm-mpws2016hp1-02.eaalab.hpi.uni-potsdam.de](http://vm-mpws2016hp1-02.eaalab.hpi.uni-potsdam.de) 	| [ ![Codeship Status for hpi-epic/pricewars-mgmt-ui](https://app.codeship.com/projects/d91a8460-88c2-0134-a385-7213830b2f8c/status?branch=master)](https://app.codeship.com/projects/184009) | Stable |
-| [Consumer](https://github.com/hpi-epic/pricewars-consumer) | master  	|  [vm-mpws2016hp1-01.eaalab.hpi.uni-potsdam.de](http://vm-mpws2016hp1-01.eaalab.hpi.uni-potsdam.de) | [ ![Codeship Status for hpi-epic/pricewars-consumer](https://app.codeship.com/projects/96f32950-7824-0134-c83e-5251019101b9/status?branch=master)](https://app.codeship.com/projects/180119) | Stable |
-| [Producer](https://github.com/hpi-epic/pricewars-producer) | master  	|  [vm-mpws2016hp1-03eaalab.hpi.uni-potsdam.de](http://vm-mpws2016hp1-03.eaalab.hpi.uni-potsdam.de) | [ ![Codeship Status for hpi-epic/pricewars-producer](https://app.codeship.com/projects/0328e450-88c6-0134-e3d6-7213830b2f8c/status?branch=master)](https://app.codeship.com/projects/184016) | Stable |
-| [Marketplace](https://github.com/hpi-epic/pricewars-marketplace) | master  	|  [vm-mpws2016hp1-04.eaalab.hpi.uni-potsdam.de/marketplace](http://vm-mpws2016hp1-04.eaalab.hpi.uni-potsdam.de/marketplace/offers) 	| [ ![Codeship Status for hpi-epic/pricewars-marketplace](https://app.codeship.com/projects/e9d9b3e0-88c5-0134-6167-4a60797e4d29/status?branch=master)](https://app.codeship.com/projects/184015) | Stable |
-| [Merchant](https://github.com/hpi-epic/pricewars-merchant) | master  	|  [vm-mpws2016hp1-06.eaalab.hpi.uni-potsdam.de/](http://vm-mpws2016hp1-06.eaalab.hpi.uni-potsdam.de/) 	| [ ![Codeship Status for hpi-epic/pricewars-merchant](https://app.codeship.com/projects/a7d3be30-88c5-0134-ea9c-5ad89f4798f3/status?branch=master)](https://app.codeship.com/projects/184013) | Stable |
-| [Kafka RESTful API](https://github.com/hpi-epic/pricewars-kafka-rest) | master  	|  [vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de](http://vm-mpws2016hp1-05.eaalab.hpi.uni-potsdam.de) 	|  [ ![Codeship Status for hpi-epic/pricewars-kafka-rest](https://app.codeship.com/projects/f59aa150-92f0-0134-8718-4a1d78af514c/status?branch=master)](https://app.codeship.com/projects/186252) | Stable |
+| Repo |
+|--- |
+| [UI](https://github.com/hpi-epic/pricewars-mgmt-ui) |
+| [Consumer](https://github.com/hpi-epic/pricewars-consumer) |
+| [Producer](https://github.com/hpi-epic/pricewars-producer) |
+| [Marketplace](https://github.com/hpi-epic/pricewars-marketplace) |
+| [Merchant](https://github.com/hpi-epic/pricewars-merchant) |
+| [Kafka RESTful API](https://github.com/hpi-epic/pricewars-kafka-rest) |
 
 ## Requirements
-
-The kafka reverse proxy is written in Python. Ensure to have [Python](https://www.python.org/) and pip installed and set up on your computer.
+* Python 3.5 or higher
 
 ## Setup
 
-After cloning the repository, install the necessary dependencies with `pip install -r requirements.txt` (Linux, MacOS) resp. `python -m pip install -r requirements.txt` (Windows).
+After cloning the repository, install the necessary dependencies with:
 
-Then start the kafka proxy by running `python LoggerApp.py`. The LoggerApp will run on _ http://localhost:8001 _.
+```python3 -m pip install -r requirements.txt```
+
+Then start the kafka proxy by running
+
+```python3 LoggerApp.py --kafka-url <KAFKA_URL>```
+
+The LoggerApp will run on http://localhost:8001.
 
 Furthermore, it is advisable to create a cronjob that deletes (old) files in the data folder which stores the learning CSV files for the data-driven merchants.
-
-## Configuration
-
-The kafka reverse proxy only needs the URL of the kafka endpoints. This URL is currently hardcoded in the `LoggerApp.py` in line 24.
 
 ## Concept
 
