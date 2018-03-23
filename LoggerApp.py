@@ -17,7 +17,7 @@ from kafka.errors import NoBrokersAvailable
 # The following kafka topics are accessible by merchants and the management UI
 topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerMinutes',
           'cumulativeAmountBasedMarketshare', 'cumulativeRevenueBasedMarketshare',
-          'marketSituation', 'revenuePerMinute', 'revenuePerHour', 'profitPerMinute']
+          'marketSituation', 'revenuePerMinute', 'revenuePerHour', 'profitPerMinute', 'inventory_level']
 
 
 class KafkaHandler:
