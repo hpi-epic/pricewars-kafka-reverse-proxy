@@ -1,10 +1,9 @@
 # Kafka Reverse Proxy
 
-This repository contains the Kafka Reverse Proxy which acts as an interfacing components between our Kafka streams and the components that need access to it. These components are:
+This repository contains the Kafka Reverse Proxy which acts as an interfacing component between our Kafka streams and merchants.
+Data-driven merchants have to be able to retrieve past market situations written to Kafka to do their learning. However, they should only be allowed to access the market situation data that they would have access to on a real system as well, ie the offers that were on the marketplace at a certain time and only their own sales data.
 
-* Flink: Flink reads from and writes to Kafka topics to do aggregation and calculate statistics
-* Management UI: The management UI needs to read from the live sales-data from the marketplace to display realtime pricing interaction between merchants. It also needs access to the aggregated statistics from Flink to visualize the performance of the merchants.
-* Merchants: Data-driven merchants have to be able to retrieve past market situations written to Kafka to do their learning. However, they should only be allowed to access the market situation data that they would have access to on a real system as well, ie the offers that were on the marketplace at a certain time and only their own sales data.
+This service provides the data as CSV files.
 
 The meta repository containing general information can be found [here](https://github.com/hpi-epic/pricewars)
 
@@ -34,22 +33,9 @@ Then start the kafka proxy by running
 
 The LoggerApp will run on http://localhost:8001.
 
-Furthermore, it is advisable to create a cronjob that deletes (old) files in the data folder which stores the learning CSV files for the data-driven merchants.
-
-## Concept
-
-The Kafka reverse proxy is the connection between the logged Kafka data and all their consumers. These include
-
-1. the Management UI (Socket IO)
-2. Merchants (CSV, Content access control)
+Furthermore, it is advisable to delete (old) files in the data folder which stores the learning CSV files for the data-driven merchants.
 
 ## Interfaces
-
-### Socket IO
-
-Socket.io is used to forward Kafka log messages to our real-time front end. All topics that are forwarded in realtime (including the topics that contain the aggregations and statistics from Flink) can be found line 37++ of the `LoggerApp.py`. To add, delete or update topics, simply change the `topics`-array.
-
-Furthermore, we use Socket.io to forward historic data to the front end. This allows the frontend to not start with empty graphs when the user enters a site, but to give the user an idea of the past data. This historic data is sent out to any client whenever it connects to our kafka reverse proxy. Currently, we consider the last 100 messages of each topic as historic data, ie a client that connects will receive for each topic the last 100 messages in a bulk-message via socket.io.
 
 ### Filtered data view as CSV
 
@@ -60,20 +46,16 @@ For merchants to view past market situations and use them for training a model, 
 #### Request data export
 
 The data export can be triggered using a GET-request on the _/export/data_-route. The export expects a merchant_token in the _Authorization_-header so that the exported data only includes the data visible to the merchant belonging to that token.
+Currently accessible topics are `buyOffer` and `marketSituation`.
 
 ```
-HTTP GET export/data/
+HTTP GET export/data/<topic>
 ```
 
 generates a CSV file for the given merchant_token and returns the path as json:
 
 ```
-{"url": "data/dump.csv"}
-```
-
-The route can also be extended with a specific topic name to only generate the CSV for that specific topic, eg.:
-```
-HTTP GET export/data/buyOffers
+{"url": "path/to/file.csv"}
 ```
 
 #### Receiving CSV file
