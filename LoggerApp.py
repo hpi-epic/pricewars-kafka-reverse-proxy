@@ -1,7 +1,5 @@
 import argparse
-import collections
 import json
-import threading
 import time
 import hashlib
 import base64
@@ -9,101 +7,31 @@ import base64
 import pandas as pd
 from flask import Flask, send_from_directory, request
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 from kafka import KafkaConsumer
 from kafka import TopicPartition
 from kafka.errors import NoBrokersAvailable
 
-# The following kafka topics are accessible by merchants and the management UI
-topics = ['addOffer', 'buyOffer', 'profit', 'updateOffer', 'updates', 'salesPerMinutes',
-          'cumulativeAmountBasedMarketshare', 'cumulativeRevenueBasedMarketshare',
-          'marketSituation', 'revenuePerMinute', 'revenuePerHour', 'profitPerMinute', 'inventory_level']
-
-
-class KafkaHandler:
-    def __init__(self, kafka_endpoint: str, socketio: SocketIO):
-        self.consumer = KafkaConsumer(bootstrap_servers=kafka_endpoint)
-        self.socketio = socketio
-        self.dumps = {}
-        end_offset = {}
-
-        for topic in topics:
-            self.dumps[topic] = collections.deque(maxlen=100)
-            current_partition = TopicPartition(topic, 0)
-            self.consumer.assign([current_partition])
-            self.consumer.seek_to_end()
-            end_offset[topic] = self.consumer.position(current_partition)
-
-        topic_partitions = [TopicPartition(topic, 0) for topic in topics]
-        self.consumer.assign(topic_partitions)
-        for topic in topics:
-            self.consumer.seek(TopicPartition(topic, 0), max(0, end_offset[topic] - 100))
-
-        self.thread = threading.Thread(target=self.run)
-        self.thread.daemon = True  # Demonize thread
-        self.thread.start()  # Start the execution
-
-    def run(self):
-        for msg in self.consumer:
-            try:
-                msg_json = json.loads(msg.value.decode('utf-8'))
-                if 'http_code' in msg_json and msg_json['http_code'] != 200:
-                    continue
-
-                output = {
-                    "topic": msg.topic,
-                    "timestamp": msg.timestamp,
-                    "value": msg_json
-                }
-                output_json = json.dumps(output)
-                self.dumps[str(msg.topic)].append(output)
-
-                self.socketio.emit(str(msg.topic), output_json, namespace='/')
-            except Exception as e:
-                print('error emit msg', e)
-
-        self.consumer.close()
-
-    def on_connect(self):
-        if self.dumps:
-            for msg_topic in self.dumps:
-                messages = list(self.dumps[msg_topic])
-                emit(msg_topic, messages, namespace='/')
-
-    def status(self):
-        status_dict = {}
-        for topic in self.dumps:
-            status_dict[topic] = {
-                'messages': len(self.dumps[topic]),
-                'last_message': self.dumps[topic][-1] if self.dumps[topic] else ''
-            }
-        return json.dumps(status_dict)
-
-
 class KafkaReverseProxy:
     def __init__(self, kafka_endpoint: str):
-        self.app = Flask(__name__, static_url_path='')
+        self.app = Flask(__name__, static_url_path='./data')
         CORS(self.app)
-        self.socketio = SocketIO(self.app)
-
         self.kafka_endpoint = kafka_endpoint
-        self.kafka_handler = KafkaHandler(kafka_endpoint, self.socketio)
         self.register_routes()
+        # The following kafka topics are accessible by merchants
+        self.topics = ['buyOffer', 'marketSituation']
 
     def register_routes(self):
-        self.app.add_url_rule('/status', 'status', self.kafka_handler.status, methods=['GET'])
         self.app.add_url_rule('/export/data/<path:topic>', 'export_csv_for_topic', self.export_csv_for_topic,
                               methods=['GET'])
         self.app.add_url_rule('/topics', 'get_topics', self.get_topics, methods=['GET'])
         self.app.add_url_rule('/data/<path:path>', 'static_proxy', self.static_proxy, methods=['GET'])
-        self.socketio.on_event('connect', self.kafka_handler.on_connect)
 
     def export_csv_for_topic(self, topic):
         auth_header = request.headers.get('Authorization')
         merchant_token = auth_header.split(' ')[-1] if auth_header else None
         merchant_id = calculate_id(merchant_token) if merchant_token else None
 
-        if topic not in topics:
+        if topic not in self.topics:
             return json.dumps({'error': 'unknown topic'})
 
         try:
@@ -159,7 +87,7 @@ class KafkaReverseProxy:
 
     @staticmethod
     def get_topics():
-        return json.dumps(topics)
+        return json.dumps(self.topics)
 
     @staticmethod
     def static_proxy(path):
@@ -198,29 +126,14 @@ def calculate_id(token: str) -> str:
     return base64.b64encode(hashlib.sha256(token.encode('utf-8')).digest()).decode('utf-8')
 
 
-def wait_for_kafka(kafka_endpoint, timeout: float = 60) -> None:
-    """
-    Waits until it is possible to connect to Kafka.
-    """
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            KafkaConsumer(consumer_timeout_ms=1000, bootstrap_servers=kafka_endpoint)
-            return
-        except NoBrokersAvailable:
-            pass
-    raise RuntimeError(kafka_endpoint + ' not reachable')
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Kafka Reverse Proxy')
-    parser.add_argument('--port', type=int, default=8001, help='port to bind socketIO App to')
+    parser.add_argument('--port', type=int, default=8001, help='port to bind server to')
     parser.add_argument('--kafka_url', type=str, required=True, help='Endpoint of the kafka bootstrap server')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    wait_for_kafka(args.kafka_url)
     server = KafkaReverseProxy(args.kafka_url)
-    server.socketio.run(server.app, host='0.0.0.0', port=args.port)
+    server.app.run(host='0.0.0.0', port=args.port)
