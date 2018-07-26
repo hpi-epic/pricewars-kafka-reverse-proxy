@@ -1,6 +1,4 @@
-flask<=0.12
+flask
 kafka-python
-flask-cors
 eventlet
-flask-socketio
 pandas

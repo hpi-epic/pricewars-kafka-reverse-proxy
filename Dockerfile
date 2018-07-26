@@ -1,4 +1,4 @@
-FROM python:3.5.2
+FROM python:3.6
 
 ENV APP_HOME /loggerapp
 RUN mkdir $APP_HOME

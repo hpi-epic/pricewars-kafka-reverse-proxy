@@ -6,15 +6,13 @@ import base64
 
 import pandas as pd
 from flask import Flask, send_from_directory, request
-from flask_cors import CORS
 from kafka import KafkaConsumer
 from kafka import TopicPartition
 from kafka.errors import NoBrokersAvailable
 
 class KafkaReverseProxy:
     def __init__(self, kafka_endpoint: str):
-        self.app = Flask(__name__, static_url_path='./data')
-        CORS(self.app)
+        self.app = Flask(__name__)
         self.kafka_endpoint = kafka_endpoint
         self.register_routes()
         # The following kafka topics are accessible by merchants
@@ -133,7 +131,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     args = parse_arguments()
     server = KafkaReverseProxy(args.kafka_url)
     server.app.run(host='0.0.0.0', port=args.port)
