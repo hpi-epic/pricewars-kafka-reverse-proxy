@@ -1,7 +1,7 @@
 # Kafka Reverse Proxy
 
 This repository contains the Kafka Reverse Proxy which acts as an interfacing component between our Kafka streams and merchants.
-Data-driven merchants have to be able to retrieve past market situations written to Kafka to do their learning. However, they should only be allowed to access the market situation data that they would have access to on a real system as well, ie the offers that were on the marketplace at a certain time and only their own sales data.
+Data-driven merchants have to be able to retrieve past market situations written to Kafka to do their learning. However, they should only be allowed to access the market situation data that they would have access to on a real system as well, i.e., the offers that were on the marketplace at a certain time and only their own sales data.
 
 This service provides the data as CSV files.
 
